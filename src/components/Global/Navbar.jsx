@@ -13,37 +13,61 @@ export default function Navbar() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (isLoggedin && !userData) {
-      fetch(`${backendUrl}/api/user/data`, {
-        credentials: "include",
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.success) {
-            setUserData({
-              firstName: data.userData.name,
-              email: data.userData.email,
-              profilePicture: data.userData.profilePicture,
-              username: data.userData.name?.split(" ")[0]?.toLowerCase() || "user",
-              isSiCreator: data.userData.isSiCreator,
-              siCreatorRequest: data.userData.siCreatorRequest,
-            });
-          } else {
-            setIsLoggedin(false);
-            setUserData(null);
-          }
-        })
-        .catch(() => {
+    const checkAuthAndFetchUser = async () => {
+      try {
+        const authRes = await fetch(`${backendUrl}/api/auth/is-auth`, {
+          method: "GET",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+
+        const authData = await authRes.json();
+
+        if (!authData.success) {
           setIsLoggedin(false);
           setUserData(null);
+          return;
+        }
+
+        // Auth success, fetch user data
+        const userRes = await fetch(`${backendUrl}/api/user/data`, {
+          method: "GET",
+          credentials: "include",
         });
-    }
-  }, [isLoggedin]);
+
+        const userDataJson = await userRes.json();
+
+        if (userDataJson.success) {
+          const user = userDataJson.userData;
+          setIsLoggedin(true);
+          setUserData({
+            firstName: user.name,
+            email: user.email,
+            profilePicture: user.profilePicture,
+            username: user.name?.split(" ")[0]?.toLowerCase() || "user",
+            isSiCreator: user.isSiCreator,
+            siCreatorRequest: user.siCreatorRequest,
+          });
+        } else {
+          setIsLoggedin(false);
+          setUserData(null);
+        }
+      } catch (err) {
+        console.error("Auth check failed:", err);
+        setIsLoggedin(false);
+        setUserData(null);
+      }
+    };
+
+    checkAuthAndFetchUser();
+  }, [backendUrl]);
 
   const logout = async () => {
     try {
       await fetch(`${backendUrl}/api/auth/logout`, {
-        method: "POST",
+        method: "GET",
         credentials: "include",
       });
     } catch (error) {
@@ -108,22 +132,22 @@ export default function Navbar() {
   return (
     <nav className="bg-[#222831] shadow text-sm text-white relative">
       <div className="flex items-center justify-between px-6 py-3">
-        {/* Logo */}
         <Link to="/">
           <img src="/images/NavLogo.png" alt="Logo" className="h-10" />
         </Link>
 
-        {/* SearchBar (Desktop Only) */}
         <div className="hidden lg:flex items-center space-x-4 text-gray-400">
           <div className="w-[400px] lg:w-[450px] xl:w-[500px]">
             <SearchBar />
           </div>
         </div>
 
-        {/* Right Buttons (Desktop Only) */}
         <div className="hidden lg:flex items-center space-x-2 relative">
           {isLoggedin && userData ? renderSiCreatorButton() : (
-            <button className="bg-[#393E46] hover:bg-blue-600 px-4 py-2 rounded-full text-white text-sm font-medium active:scale-90">
+            <button 
+              onClick={() => navigate("/login")}
+              className="bg-[#393E46] hover:bg-blue-600 px-4 py-2 rounded-full text-white text-sm font-medium active:scale-90"
+            >
               Jadi SiCreator
             </button>
           )}
@@ -168,7 +192,6 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* Hamburger (Mobile Only) */}
         <div className="lg:hidden">
           <button
             onClick={() => setMenuOpen(!menuOpen)}
@@ -179,7 +202,6 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Mobile Menu */}
       <div
         className={clsx(
           "lg:hidden bg-[#222831] transition-all duration-300 ease-in-out overflow-hidden",
@@ -226,9 +248,11 @@ export default function Navbar() {
 
         <div className="w-full h-px bg-gray-400" />
 
-        {/* SiCreator Button */}
         {isLoggedin && userData ? renderSiCreatorButton() : (
-          <button className="w-full bg-[#393E46] hover:bg-blue-600 text-white px-4 py-2 rounded-full text-sm font-medium active:scale-90 transition">
+          <button 
+            onClick={() => navigate("/login")} 
+            className="w-full bg-[#393E46] hover:bg-blue-600 text-white px-4 py-2 rounded-full text-sm font-medium active:scale-90 transition"
+          >
             Jadi SiCreator
           </button>
         )}
@@ -239,3 +263,4 @@ export default function Navbar() {
     </nav>
   );
 }
+
