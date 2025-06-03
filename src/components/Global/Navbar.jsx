@@ -65,7 +65,7 @@ const Navbar = () => {
   const logout = async () => {
   try {
     await fetch(`${backendUrl}/api/auth/logout`, {
-      method: "GET",
+      method: "POST",
       credentials: "include", // penting untuk cookie session
     });
 
