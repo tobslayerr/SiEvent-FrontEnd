@@ -287,9 +287,3 @@ const EventDetails = () => {
 };
 
 export default EventDetails;
-
-    </div>
-  );
-};
-
-export default EventDetails;
