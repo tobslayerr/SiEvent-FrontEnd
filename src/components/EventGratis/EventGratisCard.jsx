@@ -1,31 +1,53 @@
-import React from "react";
+import React, { useEffect, useState, useContext } from "react";
 import { Link } from "react-router-dom";
-import { FaCalendarAlt, FaMapMarkerAlt, FaGlobe, FaStar } from "react-icons/fa";
+import { FaCalendarAlt, FaMapMarkerAlt, FaStar, FaStarHalfAlt, FaRegStar } from "react-icons/fa";
+import axios from "axios";
+import { AppContent } from "../../context/AppContext";
 
 const EventGratisCard = ({ event }) => {
-  // Cek apakah ada minimal satu tiket yang gratis
+  const { backendUrl } = useContext(AppContent);
+
+  // Cek apakah ada minimal satu tiket gratis
   const isFree = event.tickets?.some((ticket) => ticket.isFree === true);
-  if (!isFree) return null; // Jangan tampilkan jika tidak ada tiket gratis
+  if (!isFree) return null; // Tidak ditampilkan jika tidak ada tiket gratis
 
-  const ratings = event.ratings || [];
-  const averageRating = ratings.length
-    ? ratings.reduce((sum, rating) => sum + (rating.stars || 0), 0) / ratings.length
-    : 0;
+  // State untuk rata-rata rating dan jumlah rating
+  const [averageRating, setAverageRating] = useState("0.0");
+  const [ratingCount, setRatingCount] = useState(0);
 
-  const filledStars = Math.floor(averageRating);
-  const emptyStars = 5 - filledStars;
+  // Fetch rata-rata dan jumlah rating dari backend
+  useEffect(() => {
+    const fetchAverage = async () => {
+      try {
+        const res = await axios.get(`${backendUrl}/api/rating/readaverage/${event._id}`);
+        const { averageRating: avg, totalRatings } = res.data;
+        setAverageRating(avg || "0.0");
+        setRatingCount(totalRatings || 0);
+      } catch (err) {
+        console.error("Gagal mengambil rata-rata rating:", err.message);
+      }
+    };
+
+    if (event._id) {
+      fetchAverage();
+    }
+  }, [backendUrl, event._id]);
+
+  // Hitung jumlah bintang penuh dan setengah
+  const filledStars = Math.floor(parseFloat(averageRating));
+  const hasHalfStar = parseFloat(averageRating) - filledStars >= 0.5;
+  const emptyStars = 5 - filledStars - (hasHalfStar ? 1 : 0);
 
   const renderStars = () => {
     const stars = [];
     for (let i = 0; i < filledStars; i++) {
-      stars.push(
-        <FaStar key={`filled-${i}`} className="text-yellow-400 text-sm" />
-      );
+      stars.push(<FaStar key={`filled-${i}`} className="text-yellow-400 text-sm" />);
+    }
+    if (hasHalfStar) {
+      stars.push(<FaStarHalfAlt key="half" className="text-yellow-400 text-sm" />);
     }
     for (let i = 0; i < emptyStars; i++) {
-      stars.push(
-        <FaStar key={`empty-${i}`} className="text-gray-300 text-sm" />
-      );
+      stars.push(<FaRegStar key={`empty-${i}`} className="text-gray-300 text-sm" />);
     }
     return stars;
   };
@@ -46,9 +68,9 @@ const EventGratisCard = ({ event }) => {
           </p>
 
           <div className="flex items-center space-x-1 mt-1 mb-2 text-xs text-gray-700">
-            <p className="text-gray-600">{averageRating.toFixed(1)}</p>
+            <p className="text-gray-600">{parseFloat(averageRating).toFixed(1)}</p>
             <div className="flex">{renderStars()}</div>
-            <p className="text-gray-500">({ratings.length})</p>
+            <p className="text-gray-500">({ratingCount})</p>
           </div>
 
           <div className="text-xs text-gray-600 leading-snug space-y-1">
