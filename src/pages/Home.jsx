@@ -5,6 +5,7 @@ import EventTerdekat from '../components/Home/EventTerdekat';
 import EventGratis from '../components/Home/EventGratis';
 import ToLogin from '../components/Home/ToLogin';
 import Loading from '../components/Global/Loading';
+import Pamflet from '../components/Home/Pamflet';
 
 const Home = () => {
   const { isLoggedin, loading } = useContext(AppContent);
@@ -19,6 +20,9 @@ const Home = () => {
       </div>
       <div className="p-12 h-auto bg-gradient-to-b from-blue-200 via-white to-blue-20">
         <EventGratis />
+      </div>
+      <div className="p-10" >
+        <Pamflet />
       </div>
       {!isLoggedin && (
         <div>
