@@ -1,7 +1,13 @@
 import React, { useState, useEffect, useContext } from "react";
 import axios from "axios";
 import { AppContent } from "../context/AppContext";
-import { FaMapMarkerAlt, FaCalendarAlt, FaStar, FaStarHalfAlt, FaRegStar } from "react-icons/fa";
+import {
+  FaMapMarkerAlt,
+  FaCalendarAlt,
+  FaStar,
+  FaStarHalfAlt,
+  FaRegStar,
+} from "react-icons/fa";
 import { Link, useSearchParams } from "react-router-dom";
 import Select from "react-select";
 import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
@@ -20,14 +26,15 @@ const Event = () => {
   const { backendUrl } = useContext(AppContent);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedLocation, setSelectedLocation] = useState(lokasiOptionsStatic[0]);
+  const [selectedLocation, setSelectedLocation] = useState(
+    lokasiOptionsStatic[0]
+  );
   const [searchTitle, setSearchTitle] = useState("");
   const [filterOnline, setFilterOnline] = useState(false);
   const [filterOffline, setFilterOffline] = useState(false);
   const [searchParams] = useSearchParams();
-  const [ratingsMap, setRatingsMap] = useState({}); // { [eventId]: { average: "0.0", count: 0 } }
+  const [ratingsMap, setRatingsMap] = useState({});
 
-  // Baca query params untuk filter
   useEffect(() => {
     const q = searchParams.get("q") || "";
     const type = searchParams.get("type") || "";
@@ -47,14 +54,15 @@ const Event = () => {
     }
 
     if (location) {
-      const matchedLocation = lokasiOptionsStatic.find((loc) => loc.value === location);
+      const matchedLocation = lokasiOptionsStatic.find(
+        (loc) => loc.value === location
+      );
       if (matchedLocation) {
         setSelectedLocation(matchedLocation);
       }
     }
   }, [searchParams]);
 
-  // Fetch daftar event
   useEffect(() => {
     const fetchEvents = async () => {
       try {
@@ -75,7 +83,6 @@ const Event = () => {
     fetchEvents();
   }, [backendUrl]);
 
-  // Setelah events terisi, fetch rata-rata rating setiap event
   useEffect(() => {
     if (events.length === 0) return;
 
@@ -93,7 +100,10 @@ const Event = () => {
               count: totalRatings || 0,
             };
           } catch (err) {
-            console.error(`Gagal mengambil rating untuk event ${ev._id}:`, err.message);
+            console.error(
+              `Gagal mengambil rating untuk event ${ev._id}:`,
+              err.message
+            );
             map[ev._id] = { average: "0.0", count: 0 };
           }
         })
@@ -104,7 +114,6 @@ const Event = () => {
     fetchAllAverages();
   }, [events, backendUrl]);
 
-  // Normalisasi teks untuk pencarian
   const normalizeText = (text) =>
     text
       .toLowerCase()
@@ -112,10 +121,10 @@ const Event = () => {
       .trim()
       .replace(/\s/g, "");
 
-  // Filter event berdasarkan lokasi, judul, dan jenis
   const filteredEvents = events
     .filter((event) => {
-      if (selectedLocation.value && event.location !== selectedLocation.value) return false;
+      if (selectedLocation.value && event.location !== selectedLocation.value)
+        return false;
       return true;
     })
     .filter((event) => {
@@ -129,7 +138,6 @@ const Event = () => {
       return true;
     });
 
-  // Render bintang dengan mengakomodasi setengah bintang
   const renderStars = (averageStr) => {
     const stars = [];
     const num = parseFloat(averageStr) || 0;
@@ -151,7 +159,7 @@ const Event = () => {
 
   return (
     <div className="flex flex-col md:flex-row px-4 md:px-16 py-10 gap-8 bg-gray-50 min-h-screen">
-      {/* Sidebar Filter */}
+      {/* Sidebar */}
       <aside className="w-full md:w-1/4 bg-white p-4 rounded-xl shadow-md">
         <h2 className="text-xl font-semibold mb-4">Filter Event</h2>
 
@@ -169,9 +177,6 @@ const Event = () => {
             className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             value={searchTitle}
             onChange={(e) => setSearchTitle(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") setSearchTitle("");
-            }}
           />
         </div>
 
@@ -232,12 +237,11 @@ const Event = () => {
         </div>
       </aside>
 
-      {/* Main Content: Daftar Event */}
+      {/* Daftar Event */}
       <main className="w-full md:w-3/4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {loading
-            ? // Tampilkan skeleton loading
-              Array.from({ length: 6 }).map((_, index) => (
+            ? Array.from({ length: 6 }).map((_, index) => (
                 <SkeletonTheme
                   baseColor="#e0e0e0"
                   highlightColor="#f5f5f5"
@@ -255,11 +259,28 @@ const Event = () => {
                   </div>
                 </SkeletonTheme>
               ))
-            : filteredEvents.length > 0 &&
-              filteredEvents.map((event) => {
-                // Ambil rata-rata dan count dari ratingsMap
+            : filteredEvents.map((event) => {
                 const { average = "0.0", count = 0 } =
                   ratingsMap[event._id] || {};
+
+                let priceDisplay = "Gratis";
+                let isFreeEvent = true;
+                let minPrice = Infinity;
+
+                if (event.tickets && event.tickets.length > 0) {
+                  const paidTickets = event.tickets.filter(
+                    (ticket) => !ticket.isFree && ticket.price > 0
+                  );
+                  if (paidTickets.length > 0) {
+                    isFreeEvent = false;
+                    minPrice = Math.min(
+                      ...paidTickets.map((ticket) => ticket.price)
+                    );
+                    priceDisplay = `Mulai dari Rp ${minPrice.toLocaleString(
+                      "id-ID"
+                    )}`;
+                  }
+                }
 
                 return (
                   <Link
@@ -300,7 +321,6 @@ const Event = () => {
                         {event.type === "online" ? "Online" : "Offline"}
                       </div>
 
-                      {/* Tampilkan Rating */}
                       <div className="flex items-center gap-1 text-sm text-yellow-500 mb-2">
                         {renderStars(average)}
                         <span className="ml-1 text-gray-600 text-xs">
@@ -308,11 +328,14 @@ const Event = () => {
                         </span>
                       </div>
 
-                      {/* Harga / Free */}
-                      <span className="inline-block bg-blue-100 text-blue-600 text-sm font-semibold px-3 py-1 rounded-full">
-                        {event.price > 0
-                          ? `Rp.${event.price.toLocaleString("id-ID")}`
-                          : "Gratis"}
+                      <span
+                        className={`inline-block text-sm font-semibold px-3 py-1 rounded-full ${
+                          isFreeEvent
+                            ? "bg-green-100 text-green-600"
+                            : "bg-blue-100 text-blue-600"
+                        }`}
+                      >
+                        {priceDisplay}
                       </span>
                     </div>
                   </Link>
