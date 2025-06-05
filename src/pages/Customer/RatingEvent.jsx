@@ -2,6 +2,7 @@ import React, { useEffect, useState, useContext } from "react";
 import axios from "axios";
 import { AppContent } from "../../context/AppContext";
 import { FaStar, FaRegStar, FaStarHalfAlt } from "react-icons/fa";
+import { motion, AnimatePresence } from "framer-motion";
 
 const RatingEvent = ({ eventId }) => {
   const { userData, backendUrl, isLoggedin } = useContext(AppContent);
@@ -14,20 +15,17 @@ const RatingEvent = ({ eventId }) => {
   const [errorMsg, setErrorMsg] = useState("");
   const [averageRating, setAverageRating] = useState({ value: "0.0", count: 0 });
   const [refreshUserRating, setRefreshUserRating] = useState(false);
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
     const fetchRatings = async () => {
       try {
         const resRatings = await axios.get(`${backendUrl}/api/rating/readall/${eventId}`);
-        const ratingsArray = resRatings.data.ratings || [];
-        setRatings(ratingsArray);
+        setRatings(resRatings.data || []);
 
         const resAvg = await axios.get(`${backendUrl}/api/rating/readaverage/${eventId}`);
         const { averageRating: avg, totalRatings } = resAvg.data;
-        setAverageRating({
-          value: avg || "0.0",
-          count: totalRatings || 0,
-        });
+        setAverageRating({ value: avg || "0.0", count: totalRatings || 0 });
       } catch (error) {
         console.error("Gagal mengambil rating:", error.message);
       } finally {
@@ -39,30 +37,23 @@ const RatingEvent = ({ eventId }) => {
   }, [backendUrl, eventId]);
 
   useEffect(() => {
-  const fetchUserRating = async () => {
-    if (!userData || !userData._id || !eventId) return;
+    const fetchUserRating = async () => {
+      if (!userData || !userData._id || !eventId) return;
 
-    try {
-      const res = await axios.get(
-        `${backendUrl}/api/rating/readone/user/${userData._id}/event/${eventId}`,
-        { withCredentials: true }
-      );
-      if (res.data?.rating) {
-        setUserRating(res.data.rating);
-      } else {
-        setUserRating(null);
+      try {
+        const res = await axios.get(
+          `${backendUrl}/api/rating/readone/user/${userData._id}/event/${eventId}`,
+          { withCredentials: true }
+        );
+        setUserRating(res.data?.rating || null);
+      } catch (error) {
+        if (error.response?.status === 404) setUserRating(null);
+        else console.error("Gagal mengambil rating user:", error.message);
       }
-    } catch (error) {
-      if (error.response?.status === 404) {
-        setUserRating(null);
-      } else {
-        console.error("Gagal mengambil rating user:", error.message);
-      }
-    }
-  };
+    };
 
-  fetchUserRating();
-}, [backendUrl, userData, eventId, refreshUserRating]);
+    fetchUserRating();
+  }, [backendUrl, userData, eventId, refreshUserRating]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -80,25 +71,20 @@ const RatingEvent = ({ eventId }) => {
       );
 
       if (res.data.success) {
-  const newRating = res.data.data;
-  setRatings((prev) => [...prev, newRating]);
-  setStars(0);
-  setReview("");
-  setErrorMsg("");
-  setRefreshUserRating((prev) => !prev); // 🔁 paksa re-fetch user rating
+        setRatings((prev) => [...prev, res.data.data]);
+        setStars(0);
+        setReview("");
+        setRefreshUserRating((prev) => !prev);
 
-  const avgRes = await axios.get(`${backendUrl}/api/rating/readaverage/${eventId}`);
-  const { averageRating: avg, totalRatings } = avgRes.data;
-  setAverageRating({
-    value: avg || "0.0",
-    count: totalRatings || 0,
-  });
-}
+        const avgRes = await axios.get(`${backendUrl}/api/rating/readaverage/${eventId}`);
+        const { averageRating: avg, totalRatings } = avgRes.data;
+        setAverageRating({ value: avg || "0.0", count: totalRatings || 0 });
+      }
     } catch (error) {
       if (error.response?.status === 400 || error.response?.status === 409) {
-        setErrorMsg(error.response.data.message || "Anda sudah memberi rating untuk event ini.");
+        setErrorMsg(error.response.data.message || "Anda sudah memberi rating.");
       } else {
-        alert("Gagal mengirim rating. Silakan coba lagi.");
+        alert("Gagal mengirim rating.");
         console.error("Error on submit rating:", error);
       }
     } finally {
@@ -107,19 +93,15 @@ const RatingEvent = ({ eventId }) => {
   };
 
   const renderStars = (value) => {
-    const starsJSX = [];
     const num = parseFloat(value);
-    for (let i = 1; i <= 5; i++) {
-      if (num >= i) {
-        starsJSX.push(<FaStar key={i} className="text-yellow-500" />);
-      } else if (num >= i - 0.5) {
-        starsJSX.push(<FaStarHalfAlt key={i} className="text-yellow-500" />);
-      } else {
-        starsJSX.push(<FaRegStar key={i} className="text-yellow-500" />);
-      }
-    }
-    return starsJSX;
+    return Array.from({ length: 5 }, (_, i) => {
+      if (num >= i + 1) return <FaStar key={i} className="text-yellow-500" />;
+      if (num >= i + 0.5) return <FaStarHalfAlt key={i} className="text-yellow-500" />;
+      return <FaRegStar key={i} className="text-yellow-500" />;
+    });
   };
+
+  const visibleRatings = showAll ? ratings : ratings.slice(0, 4);
 
   return (
     <div className="mt-8 bg-white p-6 rounded-xl shadow-md">
@@ -179,9 +161,53 @@ const RatingEvent = ({ eventId }) => {
       {!isLoggedin && (
         <p className="text-sm text-gray-500 mt-4">Login untuk memberi rating.</p>
       )}
+
+      {ratings.length > 0 && (
+        <div className="mt-8 border-t pt-6">
+          <h3 className="text-lg font-semibold mb-4">Ulasan dari Pengguna Lain</h3>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <AnimatePresence initial={false}>
+              {visibleRatings.map((rating) => (
+                <motion.div
+                  key={rating._id}
+                  layout
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="bg-gray-50 p-4 rounded-lg shadow-sm border"
+                >
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-semibold text-gray-800">
+                      {rating.user?.name || "Pengguna"}
+                    </span>
+                    <div className="flex">{renderStars(rating.stars)}</div>
+                  </div>
+                  <p className="text-gray-600">{rating.review}</p>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+
+          {ratings.length > 4 && (
+            <div className="mt-4 text-center">
+              <button
+                onClick={() => setShowAll((prev) => !prev)}
+                className="text-blue-600 hover:underline text-sm font-medium"
+              >
+                {showAll ? "Sembunyikan Ulasan" : "Lihat Semua Ulasan"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
+
+export default RatingEvent;
+
 
 export default RatingEvent;
 
