@@ -207,7 +207,3 @@ const RatingEvent = ({ eventId }) => {
 };
 
 export default RatingEvent;
-
-
-export default RatingEvent;
-
