@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from "react";
+import React, { useEffect, useState, useContext, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { AppContent } from "../../context/AppContext";
 import axios from "axios";
@@ -7,6 +7,8 @@ import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
 import AlertBox from "../../components/Global/AlertBox";
 import RatingEvent from "./RatingEvent";
+// --- Import komponen peta baru ---
+import EventMapView from "../../components/MapViewer"; // Sesuaikan path jika berbeda
 
 const EventDetails = () => {
   const { id } = useParams();
@@ -20,32 +22,33 @@ const EventDetails = () => {
   const [showAlert, setShowAlert] = useState(false);
   const [alertMessage, setAlertMessage] = useState("");
 
-  useEffect(() => {
-    const fetchEvent = async () => {
-      try {
-        const res = await axios.get(`${backendUrl}/api/event/${id}`);
-        if (res.data.success) {
-          setEvent(res.data.event);
-          const initialSelected = {};
-          res.data.event.tickets.forEach(ticket => {
-            initialSelected[ticket._id] = 0;
-          });
-          setSelectedTickets(initialSelected);
-        } else {
-          setAlertMessage("Gagal mengambil data event.");
-          setShowAlert(true);
-        }
-      } catch (err) {
-        console.error("Gagal memuat detail event:", err.message);
-        setAlertMessage("Terjadi kesalahan saat mengambil data event.");
+  const fetchEvent = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await axios.get(`${backendUrl}/api/event/${id}`);
+      if (res.data.success) {
+        setEvent(res.data.event);
+        const initialSelected = {};
+        res.data.event.tickets.forEach(ticket => {
+          initialSelected[ticket._id] = 0;
+        });
+        setSelectedTickets(initialSelected);
+      } else {
+        setAlertMessage("Gagal mengambil data event.");
         setShowAlert(true);
-      } finally {
-        setLoading(false);
       }
-    };
-
-    fetchEvent();
+    } catch (err) {
+      console.error("Gagal memuat detail event:", err.message);
+      setAlertMessage("Terjadi kesalahan saat mengambil data event.");
+      setShowAlert(true);
+    } finally {
+      setLoading(false);
+    }
   }, [backendUrl, id]);
+
+  useEffect(() => {
+    fetchEvent();
+  }, [fetchEvent]);
 
   const getEventPriceRange = () => {
     if (!event?.tickets || event.tickets.length === 0) {
@@ -104,19 +107,24 @@ const EventDetails = () => {
 
       if (res.data.success && res.data.token) {
         window.snap.pay(res.data.token, {
-          onSuccess: () => {
+          onSuccess: (result) => {
+            console.log("Pembayaran Berhasil:", result);
             setAlertMessage("Pembayaran berhasil! Silakan cek tiket Anda.");
             setShowAlert(true);
+            navigate("/profile", { state: { tab: "tickets", fromPayment: true } });
           },
-          onPending: () => {
+          onPending: (result) => {
+            console.log("Pembayaran Tertunda:", result);
             setAlertMessage("Pembayaran tertunda. Harap selesaikan pembayaran.");
             setShowAlert(true);
           },
-          onError: () => {
+          onError: (error) => {
+            console.error("Pembayaran Gagal:", error);
             setAlertMessage("Pembayaran gagal. Silakan coba lagi.");
             setShowAlert(true);
           },
           onClose: () => {
+            console.log("Pembayaran Dibatalkan oleh Pengguna.");
             setAlertMessage("Pembayaran dibatalkan.");
             setShowAlert(true);
           },
@@ -182,6 +190,7 @@ const EventDetails = () => {
         <div className="flex flex-col lg:flex-row gap-6">
           <div className="flex-1 bg-white p-6 rounded-xl shadow">
             <div className="flex gap-3 mb-4 border-b pb-2">
+              {/* --- Ubah teks tab "peta" menjadi "Lihat Peta" --- */}
               {["deskripsi", "tiket", "peta"].map((tab) => (
                 <button
                   key={tab}
@@ -204,60 +213,78 @@ const EventDetails = () => {
               </div>
             ) : activeTab === "deskripsi" ? (
               <>
-              <div className="space-y-3">
-                <p className="text-blue-600 font-medium">Event Detail</p>
-                <h2 className="text-2xl font-bold text-gray-800">Deskripsi Event</h2>
-                <p className="text-gray-700 whitespace-pre-line leading-relaxed">
-                  {event.description}
-                </p>
-                <h3 className="font-semibold text-lg mt-6">Kebijakan Pengembalian</h3>
-                <p className="text-gray-700">
-                  Semua pembelian tiket adalah final dan tidak dapat dikembalikan (NO REFUND), kecuali jika event dibatalkan oleh penyelenggara.
-                </p>
-              </div>
-              <RatingEvent eventId={event._id} />
+                <div className="space-y-3">
+                  <p className="text-blue-600 font-medium">Event Detail</p>
+                  <h2 className="text-2xl font-bold text-gray-800">Deskripsi Event</h2>
+                  <p className="text-gray-700 whitespace-pre-line leading-relaxed">
+                    {event.description}
+                  </p>
+                  <h3 className="font-semibold text-lg mt-6">Kebijakan Pengembalian</h3>
+                  <p className="text-gray-700">
+                    Semua pembelian tiket adalah final dan tidak dapat dikembalikan (NO REFUND), kecuali jika event dibatalkan oleh penyelenggara.
+                  </p>
+                </div>
+                <RatingEvent eventId={event._id} />
               </>
             ) : activeTab === "tiket" ? (
               <div className="text-gray-700 space-y-4">
                 <h2 className="text-2xl font-bold text-gray-800 mb-4">Pilih Tiket</h2>
-                {event.tickets.map(ticket => (
-                  <div
-                    key={ticket._id}
-                    className="border border-gray-200 p-4 rounded-lg shadow-sm flex justify-between items-center"
+                {event.tickets.length > 0 ? (
+                  event.tickets.map(ticket => (
+                    <div
+                      key={ticket._id}
+                      className="border border-gray-200 p-4 rounded-lg shadow-sm flex justify-between items-center"
+                    >
+                      <div>
+                        <h3 className="font-semibold text-lg">{ticket.name}</h3>
+                        <p className="text-sm">
+                          {ticket.isFree
+                            ? "Gratis"
+                            : `Rp ${ticket.price.toLocaleString("id-ID")} / tiket`}
+                        </p>
+                        <p className="text-sm text-gray-500">Tersisa: {ticket.quantity}</p>
+                      </div>
+                      <div>
+                        <input
+                          type="number"
+                          min={0}
+                          max={ticket.quantity}
+                          value={selectedTickets[ticket._id] || 0}
+                          onChange={e =>
+                            handleTicketQuantityChange(ticket._id, e.target.value)
+                          }
+                          className="w-20 border px-2 py-1 rounded-md text-center"
+                        />
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-gray-600 text-center">Tidak ada tiket tersedia untuk event ini.</p>
+                )}
+                
+                {event.tickets.length > 0 && (
+                  <button
+                    onClick={handleBuyTickets}
+                    className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md font-medium transition"
                   >
-                    <div>
-                      <h3 className="font-semibold text-lg">{ticket.name}</h3>
-                      <p className="text-sm">
-                        {ticket.isFree
-                          ? "Gratis"
-                          : `Rp ${ticket.price.toLocaleString("id-ID")} / tiket`}
-                      </p>
-                      <p className="text-sm text-gray-500">Tersisa: {ticket.quantity}</p>
-                    </div>
-                    <div>
-                      <input
-                        type="number"
-                        min={0}
-                        max={ticket.quantity}
-                        value={selectedTickets[ticket._id] || 0}
-                        onChange={e =>
-                          handleTicketQuantityChange(ticket._id, e.target.value)
-                        }
-                        className="w-20 border px-2 py-1 rounded-md text-center"
-                      />
-                    </div>
-                  </div>
-                ))}
-                <button
-                  onClick={handleBuyTickets}
-                  className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md font-medium transition"
-                >
-                  Beli Tiket
-                </button>
+                    Beli Tiket
+                  </button>
+                )}
               </div>
-            ) : (
+            ) : ( // --- KONDISI KETIKA activeTab === "peta" ---
               <div>
-                <p>Integrasi peta bisa ditambahkan di sini.</p>
+                <h2 className="text-2xl font-bold text-gray-800 mb-4">Lokasi Event</h2>
+                {event.latitude && event.longitude ? (
+                  <EventMapView
+                    latitude={event.latitude}
+                    longitude={event.longitude}
+                    locationName={event.location}
+                  />
+                ) : (
+                  <p className="text-gray-600 text-center p-4 bg-gray-50 rounded-md">
+                    Informasi koordinat lokasi event tidak tersedia.
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -265,22 +292,45 @@ const EventDetails = () => {
           <div className="w-full lg:w-1/3 space-y-4">
             <div className="bg-white p-4 rounded-xl shadow">
               <h2 className="text-xl font-semibold mb-2">Detail Event</h2>
-              <div className="flex items-center gap-2 text-gray-600 mb-1">
-                <FaCalendarAlt className="text-blue-500" />
-                <span>{new Date(event?.date).toLocaleString("id-ID", {
-                  weekday: "long",
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}</span>
-              </div>
-              <div className="flex items-center gap-2 text-gray-600 mb-1">
-                <FaMapMarkerAlt className="text-blue-500" />
-                <span>{event?.location}</span>
-              </div>
-              <p className="mt-4 text-sm text-gray-500">Harga: {getEventPriceRange()}</p>
+              {loading ? (
+                <div className="space-y-2">
+                  <Skeleton height={20} width={200} />
+                  <Skeleton height={20} width={180} />
+                  <Skeleton height={16} width={100} />
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 text-gray-600 mb-1">
+                    <FaCalendarAlt className="text-blue-500" />
+                    <span>{new Date(event?.date).toLocaleString("id-ID", {
+                      weekday: "long",
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-600 mb-1">
+                    <FaMapMarkerAlt className="text-blue-500" />
+                    <span>{event?.location}</span>
+                  </div>
+                  {event?.eventLink && (
+                    <div className="flex items-center gap-2 text-gray-600 mb-1">
+                      <FaLink className="text-blue-500" />
+                      <a 
+                        href={event.eventLink} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="text-blue-600 hover:underline"
+                      >
+                        Lihat Link Event
+                      </a>
+                    </div>
+                  )}
+                  <p className="mt-4 text-sm text-gray-500">Harga: {getEventPriceRange()}</p>
+                </>
+              )}
             </div>
           </div>
         </div>

@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useContext } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom"; // Import useLocation
 import axios from "axios";
 import { AppContent } from "../../context/AppContext";
 import Loading from "../../components/Global/Loading";
+import MyTickets from './MyTickets'; // Sesuaikan path jika MyTickets berada di file terpisah
 
 export default function Profile() {
   const [selectedTab, setSelectedTab] = useState("dashboard");
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true); // loading lokal
+  const [loading, setLoading] = useState(true);
   const { backendUrl } = useContext(AppContent);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -29,6 +31,12 @@ export default function Profile() {
     fetchUserData();
   }, [backendUrl, navigate]);
 
+  useEffect(() => {
+    if (location.state?.tab) {
+      setSelectedTab(location.state.tab);
+    }
+  }, [location.state]);
+
   const handlePasswordReset = () => {
     navigate("/reset-password-profile");
   };
@@ -39,7 +47,7 @@ export default function Profile() {
 
   if (loading) return <Loading />;
 
-  if (!user) return null; // Optional safety
+  if (!user) return null;
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col md:flex-row">
@@ -69,7 +77,7 @@ export default function Profile() {
         <div className="mt-4 md:mt-auto">
           <button
             onClick={() => navigate("/")}
-            className="w-full bg-[#00ADB5] text-white text-sm px-4 py-2 rounded-md hover:bg-blue-500 transition active:scale-90  duration-300 "
+            className="w-full bg-[#00ADB5] text-white text-sm px-4 py-2 rounded-md hover:bg-blue-500 transition active:scale-90  duration-300 "
           >
             Kembali ke Beranda
           </button>
@@ -105,9 +113,9 @@ export default function Profile() {
         )}
 
         {selectedTab === "tickets" && (
-          <div className="max-w-md mx-auto bg-white p-6 rounded-md shadow">
+          <div className="max-w-full md:max-w-none mx-auto bg-white p-6 rounded-md shadow">
             <h3 className="text-xl font-semibold mb-4">Tiket Saya</h3>
-            <p className="text-sm text-gray-600">(Daftar tiket akan ditampilkan di sini)</p>
+            <MyTickets /> {/* <---- KOMPONEN MyTickets DITAMPILKAN DI SINI */}
           </div>
         )}
 

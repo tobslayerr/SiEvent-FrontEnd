@@ -1,9 +1,10 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useState, useCallback } from "react"; // Tambahkan useCallback
 import axios from "axios";
 import { AppContent } from "../../context/AppContext";
 import { useNavigate } from "react-router-dom";
 import Loading from "../../components/Global/Loading";
 import AlertBox from "../../components/Global/AlertBox";
+import MapLocationPicker from "../../components/MapLocationPicker"; // Pastikan path ini benar!
 
 export default function SiCreatorDashboard() {
   const { backendUrl, userData, isLoggedin } = useContext(AppContent);
@@ -19,19 +20,19 @@ export default function SiCreatorDashboard() {
   const [formData, setFormData] = useState({
     name: "",
     type: "",
-    price: "", // This will be the event's overall price, if applicable
+    price: "",
     date: "",
-    location: "",
+    location: "", // Ini akan menyimpan alamat string
     description: "",
     isFree: false,
     banner: null,
+    latitude: null, // State baru untuk latitude
+    longitude: null, // State baru untuk longitude
   });
 
-  // --- NEW STATE FOR TICKETS ---
   const [ticketData, setTicketData] = useState([
     { name: "", quantity: "", price: "", isFree: false },
   ]);
-  // --- END NEW STATE ---
 
   const showAlert = (type, message) => {
     setAlert({ type, message });
@@ -57,7 +58,6 @@ export default function SiCreatorDashboard() {
     }
   }, [isLoggedin, userData]);
 
-  // --- NEW HANDLERS FOR TICKETS ---
   const handleAddTicket = () => {
     setTicketData([...ticketData, { name: "", quantity: "", price: "", isFree: false }]);
   };
@@ -76,7 +76,17 @@ export default function SiCreatorDashboard() {
     }
     setTicketData(newTicketData);
   };
-  // --- END NEW HANDLERS ---
+
+  // --- NEW HANDLER FOR LOCATION SELECTION FROM MAP ---
+  const handleLocationSelect = useCallback(({ lat, lng, address }) => {
+    setFormData((prev) => ({
+      ...prev,
+      location: address, // Set alamat yang diformat
+      latitude: lat,
+      longitude: lng,
+    }));
+  }, []);
+  // --- END NEW HANDLER ---
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -96,36 +106,49 @@ export default function SiCreatorDashboard() {
       }
     }
 
+    // --- NEW VALIDATION FOR LOCATION ---
+    if (!formData.latitude || !formData.longitude || !formData.location) {
+      showAlert("error", "❌ Silakan pilih lokasi event di peta dan pastikan alamat terisi.");
+      setIsSubmitting(false);
+      return;
+    }
+    // --- END NEW VALIDATION ---
+
     try {
       const payload = new FormData();
       Object.entries(formData).forEach(([key, value]) => {
-        if (key === "banner" && !value) return; // Don't append if banner is null on edit
-        if (key === "price" && formData.isFree) return; // Don't send price if event is free
+        if (key === "banner" && !value) return; // Jangan tambahkan jika banner null saat edit
+        if (key === "price" && formData.isFree) return; // Jangan kirim harga jika event gratis
+
+        // Pastikan latitude dan longitude juga ditambahkan ke payload
+        // Tapi hindari mengirim 'null' sebagai string jika belum ada
+        if (key === "latitude" && value === null) return;
+        if (key === "longitude" && value === null) return;
+        
         payload.append(key, value);
       });
       payload.set("isFree", formData.isFree ? "true" : "false");
 
       // --- ADD TICKETS TO PAYLOAD ---
-      // Stringify the ticketData array and append it
       payload.append("tickets", JSON.stringify(ticketData));
       // --- END ADD TICKETS ---
 
       if (editingId) {
         await axios.patch(`${backendUrl}/api/event/updateevent/${editingId}`, payload, {
           withCredentials: true,
-          headers: { "Content-Type": "multipart/form-data" }, // Ensure correct header for FormData
+          headers: { "Content-Type": "multipart/form-data" },
         });
         showAlert("success", " Event berhasil diperbarui!");
         setEditingId(null);
       } else {
         await axios.post(`${backendUrl}/api/event/create`, payload, {
           withCredentials: true,
-          headers: { "Content-Type": "multipart/form-data" }, // Ensure correct header for FormData
+          headers: { "Content-Type": "multipart/form-data" },
         });
         showAlert("success", " Event berhasil dibuat!");
       }
 
-      // Reset forms
+      // Reset forms, termasuk data lokasi
       setFormData({
         name: "",
         type: "",
@@ -135,6 +158,8 @@ export default function SiCreatorDashboard() {
         description: "",
         isFree: false,
         banner: null,
+        latitude: null,
+        longitude: null,
       });
       setTicketData([{ name: "", quantity: "", price: "", isFree: false }]); // Reset tickets
       fetchMyEvents();
@@ -157,9 +182,10 @@ export default function SiCreatorDashboard() {
       description: event.description || "",
       isFree: event.isFree || false,
       banner: null, // Banner needs to be re-uploaded if changed
+      latitude: event.latitude || null, // Muat latitude yang ada
+      longitude: event.longitude || null, // Muat longitude yang ada
     });
     // --- SET TICKET DATA FOR EDITING ---
-    // Make sure event.tickets exists and is an array before setting
     setTicketData(event.tickets && event.tickets.length > 0 ? event.tickets.map(ticket => ({
       name: ticket.name || "",
       quantity: ticket.quantity || "",
@@ -216,7 +242,25 @@ export default function SiCreatorDashboard() {
         <h2 className="text-xl font-bold">SiCreator</h2>
         <div className="flex flex-col space-y-2">
           <button
-            onClick={() => setActiveTab("create")}
+            onClick={() => {
+              setActiveTab("create");
+              // Reset form data saat beralih ke tab buat/edit jika tidak dalam mode edit yang aktif
+              if (!editingId) {
+                setFormData({
+                  name: "",
+                  type: "",
+                  price: "",
+                  date: "",
+                  location: "",
+                  description: "",
+                  isFree: false,
+                  banner: null,
+                  latitude: null,
+                  longitude: null,
+                });
+                setTicketData([{ name: "", quantity: "", price: "", isFree: false }]);
+              }
+            }}
             className={`text-left w-full px-4 py-2 rounded-md text-sm font-medium transition duration-300 ${
               activeTab === "create"
                 ? "bg-blue-100 text-blue-700"
@@ -226,7 +270,10 @@ export default function SiCreatorDashboard() {
             ➕ Buat Event
           </button>
           <button
-            onClick={() => setActiveTab("view")}
+            onClick={() => {
+              setActiveTab("view");
+              setEditingId(null); // Kosongkan editing state saat beralih ke tab view
+            }}
             className={`text-left w-full px-4 py-2 rounded-md text-sm font-medium transition duration-300 ${
               activeTab === "view"
                 ? "bg-blue-100 text-blue-700"
@@ -293,12 +340,6 @@ export default function SiCreatorDashboard() {
                 />
               </label>
 
-              {/* Removed original event price input and isFree checkbox.
-                  Now price will be handled by tickets.
-                  If you still want an overall event price, you can keep it and
-                  adjust logic, but it's redundant if tickets dictate pricing.
-              */}
-
               <input
                 type="date"
                 value={formData.date}
@@ -307,14 +348,29 @@ export default function SiCreatorDashboard() {
                 required
               />
 
-              <input
-                type="text"
-                placeholder="Lokasi Event"
-                value={formData.location}
-                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                className="w-full p-2 border rounded"
-                required
-              />
+              {/* --- GANTI INPUT LOKASI DENGAN MAPLOCATIONPICKER --- */}
+              <label className="block">
+                <span className="block mb-1 font-medium text-gray-700">Pilih Lokasi Event di Peta</span>
+                <MapLocationPicker
+                  onSelectLocation={handleLocationSelect}
+                  initialLocation={
+                    formData.latitude && formData.longitude
+                      ? { lat: formData.latitude, lng: formData.longitude }
+                      : null
+                  }
+                />
+                {/* Tampilkan alamat yang dipilih dari peta */}
+                {formData.location && (
+                  <p className="text-sm text-gray-700 mt-2 p-2 border rounded bg-gray-50">
+                    Lokasi Terpilih: <strong>{formData.location}</strong>
+                    {/* Opsional: Tampilkan koordinat juga */}
+                    {formData.latitude && formData.longitude && (
+                      <span> (Lat: {formData.latitude.toFixed(4)}, Lng: {formData.longitude.toFixed(4)})</span>
+                    )}
+                  </p>
+                )}
+              </label>
+              {/* --- AKHIR GANTI INPUT LOKASI --- */}
 
               <input
                 type="file"
@@ -420,6 +476,14 @@ export default function SiCreatorDashboard() {
                   <div className="mb-2 md:mb-0">
                     <h3 className="font-bold text-lg">{event.name}</h3>
                     <p className="text-sm text-gray-600">{event.date?.split("T")[0]}</p>
+                    {/* --- TAMPILKAN LOKASI DENGAN KOORDINAT --- */}
+                    <p className="text-sm text-gray-600">
+                      Lokasi: {event.location}
+                      {event.latitude && event.longitude && (
+                        <span> (Lat: {event.latitude.toFixed(4)}, Lng: {event.longitude.toFixed(4)})</span>
+                      )}
+                    </p>
+                    {/* --- AKHIR TAMPILKAN LOKASI --- */}
                     {/* Display ticket info */}
                     {event.tickets && event.tickets.length > 0 ? (
                       <div className="text-xs mt-1">
